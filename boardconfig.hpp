@@ -9,5 +9,10 @@
 #define MAX_DIMENSION ((kMatrixWidth>kMatrixHeight) ? kMatrixWidth : kMatrixHeight)
 // #define NUM_LEDS (kMatrixWidth * kMatrixHeight)
 
+#define mw 9
+#define mh 9
+#define NUMMATRIX (mw*mh)
+
+#define FRAMES_PER_SECOND  120
 
 #endif

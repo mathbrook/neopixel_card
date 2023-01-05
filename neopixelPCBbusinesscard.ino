@@ -4,10 +4,17 @@
 
 #include <FastLED.h>
 #include <stdio.h>
+#include <Bugtton.h>
 #include "twinklefox.hpp"
 #include "noise_party.hpp"
 #include "boardconfig.hpp"
-CRGBArray<NUM_LEDS> leds_twinklefox;
+#include "demoreel.hpp"
+#include <FastLED_NeoMatrix.h>
+#include <Adafruit_GFX.h>
+// #include "matrix_handling.hpp"
+const uint8_t buttonCount = 1;
+const uint8_t buttonPins[buttonCount] = {27};
+Bugtton buttons(buttonCount,buttonPins,25);
 //array to translate led positions
 const uint8_t actual_led_number[81] ={0,1,2,27,28,29,54,55,56,
                                       3,4,5,30,31,32,57,58,59,
@@ -22,14 +29,25 @@ const uint8_t actual_led_number[81] ={0,1,2,27,28,29,54,55,56,
 
 
 const uint8_t change_mode_time = 30;
+int cycle_count = 0;
 unsigned long current_time = 0;
 unsigned long last_time = 0;
 uint8_t light_pattern_state = 1; //set the first pattern to start with
 // Define the array of leds
 CRGB leds[NUM_LEDS];
 
-void fadeall() { for(int i = 0; i < NUM_LEDS; i++) { leds[i].nscale8(250); } }
-#define BRIGHTNESS 64
+FastLED_NeoMatrix *matrix = new FastLED_NeoMatrix(leds, 3, 3, 3, 3, 
+  NEO_MATRIX_TOP     + NEO_MATRIX_LEFT +
+    NEO_MATRIX_ROWS + NEO_MATRIX_PROGRESSIVE + 
+    NEO_TILE_TOP + NEO_TILE_LEFT +NEO_TILE_COLUMNS);
+
+const uint16_t colors[] = {
+  matrix->Color(230, 230, 250), matrix->Color(221, 160, 221), matrix->Color(60, 0, 100) };
+int matrix_x    = mw;
+int matrix_pass = 0;
+
+void fadeall() { for(int i = 0; i < NUM_LEDS; i++) { leds[actual_led_number[i]].nscale8(250); } }
+#define BRIGHTNESS 16
 //colortemp defines:
 #define TEMPERATURE_1 Tungsten100W
 #define TEMPERATURE_2 OvercastSky
@@ -39,26 +57,39 @@ void fadeall() { for(int i = 0; i < NUM_LEDS; i++) { leds[i].nscale8(250); } }
 // How many seconds to show black between switches
 #define BLACKTIME   1
 
+void matrix_scroll_string(){
+  for(int i=0;i<310;i++){
+  matrix->fillScreen(0);
+  matrix->setCursor(matrix_x, 0);
+  matrix->print(F("Hi! I'm Mathewos Samson and you should hire me."));
+  if(--matrix_x < -305) {
+    matrix_x = matrix->width();
+    if(++matrix_pass >= 3) matrix_pass = 0;
+    matrix->setTextColor(colors[matrix_pass]);
+  }
+  matrix->show();
+  delay(50);
+  }
+}
 
 void setup() { 
   delay(100);
-  pinMode(A0,INPUT);
-  pinMode(A1,INPUT);
-  pinMode(A2,INPUT);
-  pinMode(A3,INPUT);
-  pinMode(A4,INPUT);
-  digitalWrite(A0,LOW);
- digitalWrite(A1,LOW);
- digitalWrite(A2,LOW);
- digitalWrite(A3,LOW);
- digitalWrite(A4,LOW);
   Serial.begin(9600);
   FastLED.addLeds<WS2812B, DATA_PIN, GRB>(leds, NUM_LEDS);  // GRB ordering is typical
   FastLED.setBrightness( BRIGHTNESS );
   // Initialize our coordinates to some random values
+  matrix->begin();
+  matrix->setTextWrap(false);
+  matrix->setBrightness(BRIGHTNESS);
+  matrix->setTextColor(colors[1]);
   noise_setup();
   chooseNextColorPalette(gTargetPalette);
-  light_pattern_state = random(0,4);
+  randomSeed(analogRead(A0));
+  light_pattern_state = random(0,5);
+  matrix_scroll_string();
+  delay(100);
+  cycle_text(4);
+  last_time=millis();
 }
 
 void loop() { 
@@ -66,20 +97,16 @@ void loop() {
   if(current_time-last_time > (change_mode_time * 1000)){
     last_time = millis();
     light_pattern_state++;
+    //char buf[200];
+    //sprintf(buf,"Joystick A: %d, B: %d, C: %d, D: %d, E: %d\n",a,b,c,d,e);
+    //Serial.print(buf);
     //update when adding new patterns
-    if(light_pattern_state > 4){
+    if(light_pattern_state > 6){
       light_pattern_state=0;
+      cycle_count++;
+      cycle_text(cycle_count);
     }
   }
-  // int a = digitalRead(A0);
-  // int b = digitalRead(A1);
-  // int c = digitalRead(A2);
-  // int d = digitalRead(A3);
-  // int e = digitalRead(A4);
-  // char buf[200];
-  // sprintf(buf,"Joystick A: %d, B: %d, C: %d, D: %d, E: %d\n",a,b,c,d,e);
-  // Serial.print(buf);
-  // delay(500);
   state_machine(light_pattern_state);
 }
 
@@ -93,7 +120,7 @@ void cylon(){
     // Show the leds
     FastLED.show(); 
     // now that we've shown the leds, reset the i'th led to black
-    // leds[i] = CRGB::Black;
+    // leds[actual_led_number[i]] = CRGB::Black;
     fadeall();
     // Wait a little bit before we loop around and do it again
     delay(10);
@@ -107,7 +134,7 @@ void cylon(){
     // Show the leds
     FastLED.show();
     // now that we've shown the leds, reset the i'th led to black
-    // leds[i] = CRGB::Black;
+    // leds[actual_led_number[i]] = CRGB::Black;
     fadeall();
     // Wait a little bit before we loop around and do it again
     delay(10);
@@ -231,6 +258,12 @@ void state_machine(int state){
         pacifica_loop();
         FastLED.show();
       }
+      break;
+    }
+    case 5:
+    {
+      demo_loop();
+      break;
     }
   }
 }
@@ -281,6 +314,7 @@ void pride()
 // SPARKING: What chance (out of 255) is there that a new spark will be lit?
 // Higher chance = more roaring fire.  Lower chance = more flickery fire.
 // Default 120, suggested range 50-200.
+/*
 #define SPARKING 120
 #define FRAMES_PER_SECOND 60
 bool gReverseDirection = false;
@@ -320,6 +354,7 @@ void Fire2012()
   FastLED.show(); // display this frame
   FastLED.delay(1000 / FRAMES_PER_SECOND);
 }
+*/
 
 CRGBPalette16 pacifica_palette_1 = 
     { 0x000507, 0x000409, 0x00030B, 0x00030D, 0x000210, 0x000212, 0x000114, 0x000117, 
@@ -381,7 +416,7 @@ void pacifica_one_layer( CRGBPalette16& p, uint16_t cistart, uint16_t wavescale,
     uint16_t sindex16 = sin16( ci) + 32768;
     uint8_t sindex8 = scale16( sindex16, 240);
     CRGB c = ColorFromPalette( p, sindex8, bri, LINEARBLEND);
-    leds[i] += c;
+    leds[actual_led_number[i]] += c;
   }
 }
 
@@ -394,11 +429,11 @@ void pacifica_add_whitecaps()
   for( uint16_t i = 0; i < NUM_LEDS; i++) {
     uint8_t threshold = scale8( sin8( wave), 20) + basethreshold;
     wave += 7;
-    uint8_t l = leds[i].getAverageLight();
+    uint8_t l = leds[actual_led_number[i]].getAverageLight();
     if( l > threshold) {
       uint8_t overage = l - threshold;
       uint8_t overage2 = qadd8( overage, overage);
-      leds[i] += CRGB( overage, overage2, qadd8( overage2, overage2));
+      leds[actual_led_number[i]] += CRGB( overage, overage2, qadd8( overage2, overage2));
     }
   }
 }
@@ -407,8 +442,55 @@ void pacifica_add_whitecaps()
 void pacifica_deepen_colors()
 {
   for( uint16_t i = 0; i < NUM_LEDS; i++) {
-    leds[i].blue = scale8( leds[i].blue,  145); 
-    leds[i].green= scale8( leds[i].green, 200); 
-    leds[i] |= CRGB( 2, 5, 7);
+    leds[actual_led_number[i]].blue = scale8( leds[actual_led_number[i]].blue,  145); 
+    leds[actual_led_number[i]].green= scale8( leds[actual_led_number[i]].green, 200); 
+    leds[actual_led_number[i]] |= CRGB( 2, 5, 7);
+  }
+}
+
+void cycle_text(int cycount){
+  matrix_x    = mw;
+  matrix_pass = 0;
+  if(cycount==2){
+  for(int i=0;i<185;i++){
+    matrix->fillScreen(0);
+    matrix->setCursor(matrix_x, 0);
+    matrix->print(F("You seem to like the lights"));
+    if(--matrix_x < -305) {
+      matrix_x = matrix->width();
+      if(++matrix_pass >= 3) matrix_pass = 0;
+        matrix->setTextColor(colors[matrix_pass]);
+      }
+    matrix->show();
+    delay(50);
+    }
+  }
+  else if(cycount == 4){
+  for(int i=0;i<185;i++){
+    matrix->fillScreen(0);
+    matrix->setCursor(matrix_x, 0);
+    matrix->print(F("Remember to scan the QR code"));
+    if(--matrix_x < -305) {
+      matrix_x = matrix->width();
+      if(++matrix_pass >= 3) matrix_pass = 0;
+        matrix->setTextColor(colors[matrix_pass]);
+      }
+    matrix->show();
+    delay(50);
+    }
+  }
+  else if((cycount > 2) && (cycount % 2 == 0)){
+    for(int i=0;i<45;i++){
+      matrix->fillScreen(0);
+      matrix->setCursor(matrix_x, 0);
+      matrix->print(F("Yeet"));
+      if(--matrix_x < -305) {
+        matrix_x = matrix->width();
+        if(++matrix_pass >= 3) matrix_pass = 0;
+          matrix->setTextColor(colors[matrix_pass]);
+        }
+      matrix->show();
+      delay(50);
+    }
   }
 }
